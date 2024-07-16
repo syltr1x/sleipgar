@@ -1,9 +1,11 @@
 {
-  "name": "test",
+  "name": "sleipgar",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "ts-node index.ts"
+    "dev": "ts-node index.ts",
+    "build":"tsc",
+    "start":"node index.js"
   },
   "author": "",
   "license": "ISC",
