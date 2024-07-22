@@ -1,6 +1,6 @@
 import * as readline from 'node:readline/promises'
 import *  as fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
 import * as os from 'os';
 import { type CoreMessage, streamText } from 'ai'
 import { google } from '@ai-sdk/google';
@@ -157,7 +157,108 @@ async function solve_wifi() {
     process.stdout.write("$ sudo iptables -P OUTPUT ACCEPT\n")
   }
 }
-async function solve_sound() {}
+async function solve_sound() {
+  process.stdout.write("---------- Sound Options ----------")
+  process.stdout.write("\n\x1b[31m[0]\x1b[0m Back\n\x1b[33m[1]\x1b[0m Don't detect output\n\x1b[33m[2]\x1b[0m Don't play sound\n\x1b[33m[3]\x1b[0m Can't detect input\n")
+  const option = await terminal.question(">> ");
+
+  const soundDaemon = await new Promise<String>((resolve) => {
+    exec('ps -e | grep -E "pulseaudio|jackd|pipewire|alsa"', (error, stdout) => {
+      if (error) {
+        resolve("\x1b[31m[-] No sound daemon detected...\x1b[0m");
+        return;
+      }
+      let lines = stdout.split('\n').filter(line => line.trim().length > 0);
+      let soundDaemon = lines[0].split(/\s+/)[4]
+      resolve(soundDaemon);
+    });
+  });
+
+  if (option == "1") {
+    process.stdout.write("---------- Output Devices ----------\n")
+    if (soundDaemon == "pulseaudio") {
+      const soundOutputs = execSync('pactl list sinks');
+      const output = soundOutputs.toString();
+      const lines = output.split('\n').filter(line => line.trim().length > 0);
+      for (let i=0; i < lines.length; i++) {
+        let columns = lines[i].split(/\s+/)
+        if (columns[1].includes("#")) {
+          let state = lines[i+1].split(/\s+/)[2];
+          let id = lines[i+2].split(/\s+/)[2];
+          let alias = lines[i+3].split(/\s+/).slice(2).join(' ');
+          let muted = lines[i+8].split(/\s+/)[2];
+          let info = lines[i+42].split(/\s+/).slice(3).join(' ').slice(1,-1);
+
+          process.stdout.write(`State: ${state}\nId: ${id}\nAlias: ${alias}\nMuted: ${muted}\nInfo: ${info}\n\n`)
+        }
+      }
+    } else if (soundDaemon == "jackd") {
+      const soundOutputs = execSync('jack_lsp');
+      const output = soundOutputs.toString()
+      const lines = output.split('\n').filter(line => line.trim().length > 0);
+      for (let i=0; i < lines.length; i++) {
+        if (!lines[i].includes("capture")) {
+          process.stdout.write(lines[i])
+        }
+      }
+    } else if (soundDaemon == "alsa") {
+      const soundOutputs = execSync('aplay -l');
+      const output = soundOutputs.toString().split('\n').slice(1).join('\n');
+      process.stdout.write(output);
+    } else {
+      process.stdout.write("\x1b[31m[!]\x1b[0m Err: No sound daemon detected.")
+    }
+  } else if (option == "2") {
+    process.stdout.write("---------- Restart Daemons ----------\n")
+    if (soundDaemon == "pulseaudio") {
+      execSync('pulseaudio -k && pulseaudio --start')
+      process.stdout.write("\x1b[33m[*]\x1b[0m Info: pulseaudio restarted")
+    } else if (soundDaemon == "jackd") {
+      execSync('jack_control stop && jack_control start')
+      process.stdout.write("\x1b[33m[*]\x1b[0m Info: jack restarted")
+    } else if (soundDaemon == "alsa") {
+      execSync('sudo alsa force-reload')
+      process.stdout.write("\x1b[33m[*]\x1b[0m Info: alsa restarted")
+    } else {
+      process.stdout.write("\x1b[31m[!]\x1b[0m Err: Sound daemon not detected")
+    }
+  } else if (option == "3") {
+    process.stdout.write("---------- Input Devices ----------\n")
+    if (soundDaemon == "pulseaudio") {
+      const soundOutputs = execSync('pactl list sources');
+      const output = soundOutputs.toString();
+      const lines = output.split('\n').filter(line => line.trim().length > 0);
+      for (let i=0; i < lines.length; i++) {
+        let columns = lines[i].split(/\s+/)
+        if (columns[1].includes("#")) {
+          let state = lines[i+1].split(/\s+/)[2];
+          let id = lines[i+2].split(/\s+/)[2];
+          let alias = lines[i+3].split(/\s+/).slice(2).join(' ');
+          let muted = lines[i+8].split(/\s+/)[2];
+          let info = lines[i+42].split(/\s+/).slice(3).join(' ').slice(1,-1);
+
+          process.stdout.write(`State: ${state}\nId: ${id}\nAlias: ${alias}\nMuted: ${muted}\nInfo: ${info}\n\n`)
+        }
+      }
+      process.stdout.write("")
+    } else if (soundDaemon == "jackd") {
+      const soundInputs = execSync('jack_lsp');
+      const output = soundInputs.toString();
+      const lines = output.split('\n').filter(line => line.trim().length > 0);
+      for (let i=0; i < lines.length; i++) {
+        if (lines[i].includes("capture")) {
+          process.stdout.write(lines[i])
+        }
+      }
+    } else if (soundDaemon == "alsa") {
+      const soundInputs = execSync('arecord -l');
+      const output = soundInputs.toString().split('\n').slice(1).join('\n')
+      process.stdout.write(output)
+    } else {
+      process.stdout.write("\x1b[31m[!]\x1b[0m Err: No sound daemon detected.")
+    }
+  }
+}
 function package_man() {
   const osReleaseContent = fs.readFileSync('/etc/os-release', 'utf8');
   if (osReleaseContent.includes('ID_LIKE=debian') || osReleaseContent.includes('ID_LIKE=ubuntu')) {
