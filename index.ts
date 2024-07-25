@@ -1,6 +1,6 @@
 import * as readline from 'node:readline/promises'
 import *  as fs from 'fs';
-import { execSync, exec } from 'child_process';
+import { execSync, exec, spawnSync } from 'child_process';
 import * as os from 'os';
 import { type CoreMessage, streamText } from 'ai'
 import { google } from '@ai-sdk/google';
@@ -262,25 +262,45 @@ async function solve_sound() {
 function package_man() {
   const osReleaseContent = fs.readFileSync('/etc/os-release', 'utf8');
   if (osReleaseContent.includes('ID_LIKE=debian') || osReleaseContent.includes('ID_LIKE=ubuntu')) {
-    return 'apt update\napt upgrade';
+    return {man:'apt', upd:'update\napt upgrade', mirrors:'/etc/apt/sources.list'}
   } else if (osReleaseContent.includes('ID_LIKE=fedora')) {
-    return 'dnf update';
+    return {man:'dnf', upd:'update', mirrors:'/etc/yum.repos.d/*.repo'}
   } else if (osReleaseContent.includes('ID_LIKE=centos') || osReleaseContent.includes('ID_LIKE="rhel"')) {
-    return 'yum update';
+    return {man:'yum', upd:'update', mirrors:'/etc/yum.repos.d/*.repo'};
   } else if (osReleaseContent.includes('ID_LIKE=arch')) {
-    return 'pacman -Syu';
+    return {man:'pacman', upd:'-Syu', mirrors:'/etc/pacman.d/mirrorlist'};
   } else if (osReleaseContent.includes('ID_LIKE=opensuse')) {
-    return 'zypper update';
+    return {man:'zypper', upd:'update', mirrors:'/etc/yum.repos.d/*.repo'};
   } else if (osReleaseContent.includes('ID_LIKE=alpine')) {
-    return 'apk update\napk upgrade';
+    return {man:'apk', upd:'update\napk upgrade', mirrors:'/etc/apk/repositories'}
   } else {
     return 'error fetching package manager'
   }
 }
 async function solve_pack_man() {
   const packageManager = package_man()
-    process.stdout.write(`Package manager: ${packageManager.slice(0, packageManager.indexOf(' '))}\n`)
-    process.stdout.write(`Update command: sudo ${packageManager}\n`)
+  if (typeof packageManager != 'object') {return 1}
+  process.stdout.write(`Package manager: ${packageManager.man}\n`)
+  process.stdout.write(`Update command: sudo ${packageManager.upd}\n`)
+  process.stdout.write('\x1b[31m[0] \x1b[0mBack\n\x1b[33m[1] \x1b[0mCheck Mirrors    \x1b[33m[2]\x1b[0m\n')
+  const option = await terminal.question('>> ')
+  if (option == "0") {return 0}
+  else if (option == "1") {
+    // const mirrorsFile = fs.readFileSync(packageManager.mirrors, 'utf-8');
+    const mirrorsList = execSync(`cat ${packageManager.mirrors} | grep http`)
+    let mirrors_servers = mirrorsList.toString().split('\n')
+    process.stdout.write(`Scanning ${mirrors_servers.length} servers\n`)
+    for (let i=112; i < mirrors_servers.length; i+=3) {
+      let server_address = mirrors_servers[i].split(/\s+/)
+      let server_domain = server_address[2].split('/')[2]
+      let server_result = spawnSync('ping', ['-w', '3', '-c', '1', server_domain], {encoding: 'utf-8'});
+      if (server_result.status == 0) {
+        process.stdout.write(`\x1b[31m[-] \x1b[0m${server_address[0]} not responding.\n`)
+      } else {
+        process.stdout.write(`\x1b[32m[+] \x1b[0m${server_address[2]} is ok.\n`)
+      }
+    }
+  }
 }
 async function main() {
   while (true) {
