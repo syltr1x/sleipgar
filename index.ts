@@ -1,6 +1,7 @@
 import * as readline from 'node:readline/promises'
 import *  as fs from 'fs';
 import { execSync, exec, spawnSync } from 'child_process';
+import { promisify } from 'util';
 import * as os from 'os';
 import { type CoreMessage, streamText } from 'ai'
 import { google } from '@ai-sdk/google';
@@ -282,30 +283,47 @@ async function solve_pack_man() {
   if (typeof packageManager != 'object') {return 1}
   process.stdout.write(`Package manager: ${packageManager.man}\n`)
   process.stdout.write(`Update command: sudo ${packageManager.upd}\n`)
-  process.stdout.write('\x1b[31m[0] \x1b[0mBack\n\x1b[33m[1] \x1b[0mCheck Mirrors    \x1b[33m[2]\x1b[0m\n')
+  process.stdout.write('\x1b[31m[0] \x1b[0mBack\n\x1b[33m[1] \x1b[0mCheck mirrors    \x1b[33m[2]\x1b[0m\n')
+  if (packageManager.man == "pacman") {process.stdout.write("\x1b[33m[3] \x1b[0mAdd AUR Packages (Arch User Repositories)\n")}
   const option = await terminal.question('>> ')
   if (option == "0") {return 0}
   else if (option == "1") {
-    // const mirrorsFile = fs.readFileSync(packageManager.mirrors, 'utf-8');
+    let exec_promise = promisify(exec); 
     const mirrorsList = execSync(`cat ${packageManager.mirrors} | grep http`)
     let mirrors_servers = mirrorsList.toString().split('\n')
-    process.stdout.write(`Scanning ${mirrors_servers.length} servers\n`)
-    for (let i=112; i < mirrors_servers.length; i+=3) {
-      let server_address = mirrors_servers[i].split(/\s+/)
-      let server_domain = server_address[2].split('/')[2]
-      let server_result = spawnSync('ping', ['-w', '3', '-c', '1', server_domain], {encoding: 'utf-8'});
-      if (server_result.status == 0) {
-        process.stdout.write(`\x1b[31m[-] \x1b[0m${server_address[0]} not responding.\n`)
-      } else {
-        process.stdout.write(`\x1b[32m[+] \x1b[0m${server_address[2]} is ok.\n`)
+    process.stdout.write(`\x1b[33m[*] \x1b[0mScanning ${mirrors_servers.length} mirrors...\n`)
+    const mirrorsScan = await exec_promise("cat "+packageManager.mirrors+" | grep http | awk '{print $3}' | xargs -P 10 -I {} bash -c 'result=$(curl -Is {} -o /dev/null -w"+' "%{http_code} %{time_total}\n" -s); printf "%-70s %s\n" "{}" "[$(echo "$result" | awk "{print \$1}")] $(echo "$result" | awk "{print \$2}")s"'+"'")
+    process.stdout.write(mirrorsScan.stdout)
+  } else if (option == "2") {
+    process.stdout.write('')
+  } else if (option == "3" && packageManager.man == "pacman") {
+    const checkExistentAURH = (commands: string[]): string => {
+      for (let helper of commands) {
+        let aur_helper_out = spawnSync('which', [helper])
+        if (aur_helper_out.status == 0) {return helper}
       }
+      return ""
+    }
+    let aur_helpers = ['yay', 'paru', 'trizen']
+    const existentAURHelper: string = checkExistentAURH(aur_helpers);
+    process.stdout.write('Select an "AUR Helper"\n')
+    if (existentAURHelper != "") {aur_helpers[aur_helpers.indexOf(existentAURHelper)] = `${existentAURHelper} (installed)`}
+    process.stdout.write(`\x1b[31m[0] \x1b[0mBack\n\x1b[33m[1] \x1b[0m${aur_helpers[0]}\n\x1b[33m[2] \x1b[0m${aur_helpers[1]}\n\x1b[33m[3] \x1b[0m${aur_helpers[2]}\n`)
+    const aur_helper = await terminal.question('>> ')
+    if (aur_helper == "0") {return 0}
+    else if (aur_helper != "0" && aur_helpers[parseInt(aur_helper)].includes('(installed)')) {
+      execSync(`sudo pacman -Rns ${aur_helpers[parseInt(aur_helper)].split(/\s+/)[0]}-git`)
+    } else {
+      execSync(`git clone https://aur.archlinux.org/${aur_helpers[parseInt(aur_helper)].split(/\s+/)[0]}.git ~/${aur_helpers[parseInt(aur_helper)].split(/\s+/)[0]}`)
+      execSync(`cd ~/${aur_helpers[parseInt(aur_helper)].split(/\s+/)[0]}`)
+      execSync('makepkg -si')
     }
   }
 }
 async function main() {
   while (true) {
     console.clear()
-    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3]\x1b[0m Solve package manager\x1b[0m\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
+    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
     const action = await terminal.question('>>')
     if (action == "0") {process.exit(0)}
     if (action == "1") {
