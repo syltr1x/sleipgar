@@ -15,8 +15,21 @@ const terminal = readline.createInterface({
 
 async function sleipgar_assistant() {
   const user = os.userInfo().username;
+  const linuxDistro = execSync("cat /etc/os-release | grep '^ID=' | awk -F= '{print $2}'").toString().trim()
+  const desktopEnviroment = execSync("cat ~/.dmrc | tail -1 | awk -F= '{print $2}'").toString().trim()
+  const systemLanguage = execSync("echo $LANG | awk -F. '{print $1}'").toString().trim()
+  let system_info = "You are a 47 year old linux expert and you must try to solve my problems at all costs, you speak in technical expressions but that everyone can understand, don't overdo it with being too welcoming, make a joke every 5 messages but normally be cold."
 
   const messages: CoreMessage[] = []
+  process.stdout.write("\nDo you want send this info to assistant:\n")
+  process.stdout.write(`Linux distro: ${linuxDistro}\n`)
+  process.stdout.write(`Desktop Enviroment: ${desktopEnviroment}\n`)
+  process.stdout.write(`Language: ${systemLanguage}\n\n`)
+  const dataVerify = await terminal.question('[Y/n] >> ')
+  if (dataVerify != "n" && dataVerify != "N") {
+    system_info = `I am using ${linuxDistro} and ${desktopEnviroment} desktop enviroment, please answer me in ${systemLanguage}. `+system_info
+  }
+  console.clear()
   process.stdout.write('\x1b[33m[*]\x1b[0m To exit the chat write "bye"\n')
   while (true) {
     const userInput = await terminal.question(`${user}: `)
@@ -25,7 +38,7 @@ async function sleipgar_assistant() {
 
     const result = await streamText({
       model:  google('models/gemini-1.5-pro-latest'),
-      system: 'Eres un asistente experto en linux de 47 años y debes tratar de solucionar mis problemas a toda costa, que habla con expresiones tecnicas pero que puedan entender todos, no exageres con ser demasiado acogedor, haz algun chiste cada 5 mensajes pero normalmente se frío',
+      system: system_info,
       messages,
     })
 
