@@ -18,16 +18,20 @@ async function sleipgar_assistant() {
   const linuxDistro = execSync("cat /etc/os-release | grep '^ID=' | awk -F= '{print $2}'").toString().trim()
   const desktopEnviroment = execSync("cat ~/.dmrc | tail -1 | awk -F= '{print $2}'").toString().trim()
   const systemLanguage = execSync("echo $LANG | awk -F. '{print $1}'").toString().trim()
-  let system_info = "You are a 47 year old linux expert and you must try to solve my problems at all costs, you speak in technical expressions but that everyone can understand, don't overdo it with being too welcoming, make a joke every 5 messages but normally be cold."
+  const sessionServer = execSync("ps e | grep untraceable_keyword | tr ' ' '\n' | grep -e 'GREETER_DATA_DIR' | awk -F= '{print $2}'").toString().trim().split('\n')[0]
+  const grapichServer = execSync("ps e | grep untraceable_keyword | tr ' ' '\n' | grep -e 'SESSION_TYPE' | awk -F= '{print $2}'").toString().trim().split('\n')[0]
+  let base_info = "You are a 47 year old linux expert and you must try to solve my problems at all costs, you speak in technical expressions but that everyone can understand, don't overdo it with being too welcoming, make a joke every 5 messages but normally be cold."
 
   const messages: CoreMessage[] = []
   process.stdout.write("\nDo you want send this info to assistant:\n")
   process.stdout.write(`Linux distro: ${linuxDistro}\n`)
+  process.stdout.write(`Session server path: ${sessionServer}\n`)
+  process.stdout.write(`Graphic server: ${grapichServer}\n`)
   process.stdout.write(`Desktop Enviroment: ${desktopEnviroment}\n`)
   process.stdout.write(`Language: ${systemLanguage}\n\n`)
   const dataVerify = await terminal.question('[Y/n] >> ')
   if (dataVerify != "n" && dataVerify != "N") {
-    system_info = `I am using ${linuxDistro} and ${desktopEnviroment} desktop enviroment, please answer me in ${systemLanguage}. `+system_info
+    base_info = `I am using ${linuxDistro} and my session server path is: ${sessionServer}. ${grapichServer} as graphic server with ${desktopEnviroment} desktop enviroment, please answer me in ${systemLanguage}. `+base_info
   }
   console.clear()
   process.stdout.write('\x1b[33m[*]\x1b[0m To exit the chat write "bye"\n')
@@ -38,7 +42,7 @@ async function sleipgar_assistant() {
 
     const result = await streamText({
       model:  google('models/gemini-1.5-pro-latest'),
-      system: system_info,
+      system: base_info,
       messages,
     })
 
@@ -55,8 +59,8 @@ async function sleipgar_assistant() {
 }
 async function solve_wifi() {
   process.stdout.write("---------- Wifi Options ----------")
-  process.stdout.write("\n\x1b[31m[0]\x1b[0m Back\n\x1b[33m[1]\x1b[0m Don't have internet connection\n\x1b[33m[2]\x1b[0m Slow connection\n\x1b[33m[3]\x1b[0m Can't connect to network")
-  process.stdout.write("\n\x1b[33m[4]\x1b[0m Unstable connection\n\x1b[33m[5]\x1b[0m High Latency\n")
+  process.stdout.write("\n\x1b[31m[0]\x1b[0m Back\n\x1b[33m[1]\x1b[0m Interfaces info\n\x1b[33m[2]\x1b[0m Network info\n\x1b[33m[3]\x1b[0m ")
+  process.stdout.write("\n\x1b[33m[4]\x1b[0m Check DNS Servers \n\x1b[33m[5]\x1b[0m Firewall info\n")
   let option = await terminal.question('\n>>') 
   if (option == "0") {return 0}
   if (option == "1") {
@@ -66,7 +70,6 @@ async function solve_wifi() {
 
     let hasInterfaceConnected = false;
     process.stdout.write("---------- Interfaces Info ----------\n")
-    // Procesar cada línea de la salida
     for (let i = 1; i < lines.length; i++) {
       const columns = lines[i].split(/\s+/);
       const interfaceName = columns[0];
@@ -89,7 +92,6 @@ async function solve_wifi() {
     let lines = output.split('\n').filter(line => line.trim().length > 0);
 
     process.stdout.write("---------- Interface Info ----------\n")
-    // Procesar cada línea de la salida
     for (let i = 1; i < lines.length; i++) {
       const columns = lines[i].split(/\s+/);
       const interfaceName = columns[0];
@@ -125,7 +127,6 @@ async function solve_wifi() {
     const lines = output.split('\n').filter(line => line.trim().length > 0);
 
     process.stdout.write("---------- Interfaces Info ----------\n")
-    // Procesar cada línea de la salida
     for (let i = 0; i < lines.length; i+=2) {
       let fisicalState = "Connected"
       let monitorWarning = ""
@@ -336,7 +337,7 @@ async function solve_pack_man() {
 async function main() {
   while (true) {
     console.clear()
-    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
+    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mSolve sesion\n\x1b[33m[4]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
     const action = await terminal.question('>>')
     if (action == "0") {process.exit(0)}
     if (action == "1") {
@@ -344,6 +345,7 @@ async function main() {
     } else if (action == "2") {
       await solve_sound().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "3") {
+    } else if (action == "4") {
       await solve_pack_man().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "99") {
       await sleipgar_assistant()
