@@ -5,7 +5,7 @@ import { promisify } from 'util';
 import * as os from 'os';
 import { type CoreMessage, streamText } from 'ai'
 import { google } from '@ai-sdk/google';
-import dotenv, { parse } from 'dotenv'
+import dotenv from 'dotenv'
 dotenv.config()
 
 const terminal = readline.createInterface({
@@ -351,47 +351,60 @@ async function solve_pack_man() {
 async function solve_apps() {
   const appDirectory = await terminal.question('App directory >> ')
   const dirContent = spawnSync('ls', [appDirectory.trim()])
+  let commands: Array<string> = ['\x1b[33m[*] \x1b[0mCommands to execute:']
   if (dirContent.status != 0) {
     process.stdout.write(`Please verify your path: ${appDirectory}\n`)
     await solve_apps()
     return 0
   }
   let dir_content = dirContent.stdout.toString().split('\n').filter(content => content.trim().length > 0)
-  console.log('\x1b[31m[0] \x1b[0mBack')
-  for (let i = 0; i < dir_content.length; i += 3) {
-    const item1 = dir_content[i] ? `\x1b[33m[${i+1}] \x1b[0m${dir_content[i]}` : '';
-    const item2 = dir_content[i+1] ? `\x1b[33m[${i+2}] \x1b[0m${dir_content[i + 1]}` : '';
-    const item3 = dir_content[i+2] ? `\x1b[33m[${i+3}] \x1b[0m${dir_content[i + 2]}` : '';
-    process.stdout.write(`${item1.padEnd(30)} ${item2.padEnd(30)} ${item3}\n`);
+
+  if (dir_content.includes('package.json')) {
+    commands.push('npm install')
+    if (dir_content.includes('index.ts')) {commands.push('npx tsc')}
+    else if (dir_content.includes('index.js')) {commands.push('node index.js')}
   }
-  const selectedFile = await terminal.question('Select file >> ')
-  if (selectedFile == "0") {return 0}
-  const appFile = dir_content[parseInt(selectedFile)-1]
-  const fileExtension = appFile.split('.')[1]
-  if (fileExtension == "tgz" || fileExtension == "xz") {
-    process.stdout.write('\x1b[33m[*]\x1b[0m Commands to execute:\n')
-    process.stdout.write(`cd ${appDirectory}\n`)
-    process.stdout.write(`tar -xf ${appFile} -o ${appFile.split('.')[0]}\n`)
-    process.stdout.write(`rm ${appFile}\n`)
-    process.stdout.write(`cd ${appFile.split('.')[0]}\n`)
-    process.stdout.write('ls')
-  } else if (fileExtension == "sh") {
-    process.stdout.write('\x1b[33m[*]\x1b[0m Commands to execute:\n')
-    process.stdout.write(`cd ${appDirectory}\n`)
-    process.stdout.write(`sudo chmod +x ${appFile}\n`)
-    process.stdout.write(`./${appFile}\n`)
-  } else if (fileExtension == "deb") {
-    process.stdout.write('\x1b[33m[*]\x1b[0m Commands to execute:\n')
-    process.stdout.write(`cd ${appDirectory}\n`)
-    process.stdout.write(`sudo dpkg -i ${appFile}\n`)
+  else if (dir_content.includes('PKGBUILD')) {commands.push('makepkg -si')}
+  else if (dir_content.includes('CMakeLists.txt')) {commands.push('cmake ..', 'make install')}
+
+  if (commands.length == 1) {
+    console.log('\x1b[31m[0] \x1b[0mBack')
+    for (let i = 0; i < dir_content.length; i += 3) {
+      const item1 = dir_content[i] ? `\x1b[33m[${i+1}] \x1b[0m${dir_content[i]}` : '';
+      const item2 = dir_content[i+1] ? `\x1b[33m[${i+2}] \x1b[0m${dir_content[i + 1]}` : '';
+      const item3 = dir_content[i+2] ? `\x1b[33m[${i+3}] \x1b[0m${dir_content[i + 2]}` : '';
+      process.stdout.write(`${item1.padEnd(30)} ${item2.padEnd(30)} ${item3}\n`);
+    }
+    let selected_file = await terminal.question('Select file >> ')
+    if (selected_file == "0") {return 0}
+    const appFile = dir_content[parseInt(selected_file)-1]
+    const fileExtension = appFile.split('.')[appFile.split('.').length-1]
+    let app_dir = appDirectory
+    if (app_dir.endsWith('/')) {app_dir = app_dir.slice(0, -1)}
+    if (fileExtension == "txz" || fileExtension == "xz") {
+      commands.push(`tar -xf ${app_dir}/${appFile} -o ${appFile.split('.')[0]}`, `rm ${appFile}`)
+    } else if (fileExtension == "sh") {
+      commands.push(`sudo chmod +x ${app_dir}/${appFile}`, `./${appFile}`)
+    } else if (fileExtension == "deb") {
+      commands.push(`sudo dpkg -i ${app_dir}/${appFile}`)
+    } else if (fileExtension == "gz" || fileExtension == "taz" ||  fileExtension == "tgz") {
+      commands.push(`gzip -d ${app_dir}/${appFile}`)
+    } else if (fileExtension == "tb2" || fileExtension == "tbz" || fileExtension == "tbz2" || fileExtension == "tz2") {
+      commands.push(`bzip2 -d ${app_dir}/${appFile}`)
+    }
+    if (fileExtension != "sh") {commands.push('ls')}
   }
-  process.stdout.write(`Selected: ${appFile}\n`)
+  commands.forEach((command) => {process.stdout.write(`${command}\n`)})
+  const execVerify = await terminal.question('want proceed? [Y/n] >>')
+  if (execVerify.toLowerCase() == "n") {return 0}
+  commands.shift()
+  commands.forEach((command) => {execSync(command)})
 }
 
 async function main() {
   while (true) {
     console.clear()
-    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mSolve apps\n\x1b[33m[4]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
+    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mInstall Help\n\x1b[33m[4]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
     const action = await terminal.question('>>')
     if (action == "0") {process.exit(0)}
     if (action == "1") {
