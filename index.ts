@@ -5,7 +5,7 @@ import { promisify } from 'util';
 import * as os from 'os';
 import { type CoreMessage, streamText } from 'ai'
 import { google } from '@ai-sdk/google';
-import dotenv from 'dotenv'
+import dotenv, { parse } from 'dotenv'
 dotenv.config()
 
 const terminal = readline.createInterface({
@@ -334,10 +334,64 @@ async function solve_pack_man() {
     }
   }
 }
+// function get_session_info() {
+//   let session_data = execSync("ps e | grep untraceable_keyword | tr ' ' '\n' | grep -e 'DESKTOP_SESSION' -e 'GREETER_DATA_DIR' -e 'SESSION_TYPE' | awk -F= '{print $2}'")
+//   let session_info = session_data.toString().split('\n')
+//   let window_manager = session_info[3]
+//   let graphic_server = session_info[4]
+//   let session_server = session_info[5]
+//   if (session_server.includes('lightdm')) {session_server = 'lightdm'}
+//   else if (session_server.includes('gdm')) {session_server = 'gdm'}
+//   else if (session_server.includes('xdm')) {session_server = 'xdm'}
+//   else if (session_info.includes('sddm')) {session_server = 'ssdm'}
+//   else {session_server = `NOT DETECTED. path: ${session_server}. This maybe not have support`}
+//
+//   return {window_manager: window_manager, graphic_server: graphic_server, session_server: session_server}
+// }
+async function solve_apps() {
+  const appDirectory = await terminal.question('App directory >> ')
+  const dirContent = spawnSync('ls', [appDirectory.trim()])
+  if (dirContent.status != 0) {
+    process.stdout.write(`Please verify your path: ${appDirectory}\n`)
+    await solve_apps()
+    return 0
+  }
+  let dir_content = dirContent.stdout.toString().split('\n').filter(content => content.trim().length > 0)
+  console.log('\x1b[31m[0] \x1b[0mBack')
+  for (let i = 0; i < dir_content.length; i += 3) {
+    const item1 = dir_content[i] ? `\x1b[33m[${i+1}] \x1b[0m${dir_content[i]}` : '';
+    const item2 = dir_content[i+1] ? `\x1b[33m[${i+2}] \x1b[0m${dir_content[i + 1]}` : '';
+    const item3 = dir_content[i+2] ? `\x1b[33m[${i+3}] \x1b[0m${dir_content[i + 2]}` : '';
+    process.stdout.write(`${item1.padEnd(30)} ${item2.padEnd(30)} ${item3}\n`);
+  }
+  const selectedFile = await terminal.question('Select file >> ')
+  if (selectedFile == "0") {return 0}
+  const appFile = dir_content[parseInt(selectedFile)-1]
+  const fileExtension = appFile.split('.')[1]
+  if (fileExtension == "tgz" || fileExtension == "xz") {
+    process.stdout.write('\x1b[33m[*]\x1b[0m Commands to execute:\n')
+    process.stdout.write(`cd ${appDirectory}\n`)
+    process.stdout.write(`tar -xf ${appFile} -o ${appFile.split('.')[0]}\n`)
+    process.stdout.write(`rm ${appFile}\n`)
+    process.stdout.write(`cd ${appFile.split('.')[0]}\n`)
+    process.stdout.write('ls')
+  } else if (fileExtension == "sh") {
+    process.stdout.write('\x1b[33m[*]\x1b[0m Commands to execute:\n')
+    process.stdout.write(`cd ${appDirectory}\n`)
+    process.stdout.write(`sudo chmod +x ${appFile}\n`)
+    process.stdout.write(`./${appFile}\n`)
+  } else if (fileExtension == "deb") {
+    process.stdout.write('\x1b[33m[*]\x1b[0m Commands to execute:\n')
+    process.stdout.write(`cd ${appDirectory}\n`)
+    process.stdout.write(`sudo dpkg -i ${appFile}\n`)
+  }
+  process.stdout.write(`Selected: ${appFile}\n`)
+}
+
 async function main() {
   while (true) {
     console.clear()
-    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mSolve sesion\n\x1b[33m[4]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
+    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mSolve apps\n\x1b[33m[4]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
     const action = await terminal.question('>>')
     if (action == "0") {process.exit(0)}
     if (action == "1") {
@@ -345,6 +399,7 @@ async function main() {
     } else if (action == "2") {
       await solve_sound().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "3") {
+      await solve_apps().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "4") {
       await solve_pack_man().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "99") {
