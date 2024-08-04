@@ -14,6 +14,11 @@ const terminal = readline.createInterface({
 })
 
 async function sleipgar_assistant() {
+  if (process.env['GOOGLE_GENERATIVE_AI_API_KEY'] === undefined) {
+    process.stdout.write('\x1b[31m[!]\x1b[0m You need to configure an aistudio api key to use assistant\n')
+    await terminal.question('Press [Enter] to clear...')
+    return 1
+  }
   const user = os.userInfo().username;
   const linuxDistro = execSync("cat /etc/os-release | grep '^ID=' | awk -F= '{print $2}'").toString().trim()
   const desktopEnviroment = execSync("cat ~/.dmrc | tail -1 | awk -F= '{print $2}'").toString().trim()
@@ -59,7 +64,7 @@ async function sleipgar_assistant() {
 }
 async function solve_wifi() {
   process.stdout.write("---------- Wifi Options ----------")
-  process.stdout.write("\n\x1b[31m[0]\x1b[0m Back\n\x1b[33m[1]\x1b[0m Interfaces info\n\x1b[33m[2]\x1b[0m Network info\n\x1b[33m[3]\x1b[0m ")
+  process.stdout.write("\n\x1b[31m[0]\x1b[0m Back\n\x1b[33m[1]\x1b[0m Basic interfaces info\n\x1b[33m[2]\x1b[0m Network info\n\x1b[33m[3]\x1b[0m Complete interfaces info")
   process.stdout.write("\n\x1b[33m[4]\x1b[0m Check DNS Servers \n\x1b[33m[5]\x1b[0m Firewall info\n")
   let option = await terminal.question('\n>>') 
   if (option == "0") {return 0}
@@ -334,20 +339,6 @@ async function solve_pack_man() {
     }
   }
 }
-// function get_session_info() {
-//   let session_data = execSync("ps e | grep untraceable_keyword | tr ' ' '\n' | grep -e 'DESKTOP_SESSION' -e 'GREETER_DATA_DIR' -e 'SESSION_TYPE' | awk -F= '{print $2}'")
-//   let session_info = session_data.toString().split('\n')
-//   let window_manager = session_info[3]
-//   let graphic_server = session_info[4]
-//   let session_server = session_info[5]
-//   if (session_server.includes('lightdm')) {session_server = 'lightdm'}
-//   else if (session_server.includes('gdm')) {session_server = 'gdm'}
-//   else if (session_server.includes('xdm')) {session_server = 'xdm'}
-//   else if (session_info.includes('sddm')) {session_server = 'ssdm'}
-//   else {session_server = `NOT DETECTED. path: ${session_server}. This maybe not have support`}
-//
-//   return {window_manager: window_manager, graphic_server: graphic_server, session_server: session_server}
-// }
 async function solve_apps() {
   const appDirectory = await terminal.question('App directory >> ')
   const dirContent = spawnSync('ls', [appDirectory.trim()])
@@ -391,6 +382,12 @@ async function solve_apps() {
       commands.push(`gzip -d ${app_dir}/${appFile}`)
     } else if (fileExtension == "tb2" || fileExtension == "tbz" || fileExtension == "tbz2" || fileExtension == "tz2") {
       commands.push(`bzip2 -d ${app_dir}/${appFile}`)
+    } else if (fileExtension == "AppImage") {
+      commands.push(`chmod +x ${app_dir}/${appFile}`)
+    } else {
+      process.stdout.write(`\x1b[31m[*]\x1b[0m Not supported file format: ${fileExtension}\n`)
+      process.stdout.write('\x1b[33m[*]\x1b[0m Check available version in: github.com/syltr1x/sleipgar\n')
+      return 0
     }
     if (fileExtension != "sh") {commands.push('ls')}
   }
@@ -399,12 +396,38 @@ async function solve_apps() {
   if (execVerify.toLowerCase() == "n") {return 0}
   commands.shift()
   commands.forEach((command) => {execSync(command)})
+  process.stdout.write('\x1b[32m[+]\x1b[0m App installed succesfully!\n')
+}
+async function process_manager() {
+  const processName = await terminal.question('process name > ')
+  const processInfo = execSync(`ps faux | grep ${processName}`).toString().split(/\s+/)
+  const processID = processInfo[1]
+  const runningTime = processInfo[8]
+  const processMonitor = execSync(`ps -p ${processID} -o %cpu,%mem,comm | awk 'NR==2'`).toString().split(/\s+/)
+  const cpuUSage = processMonitor[1]
+  const memUsage = processMonitor[2]
+  const processTitle = processMonitor[3]
+
+  process.stdout.write(`Process name: ${processTitle}\n`)
+  process.stdout.write(`Process ID: ${processID}\n`)
+  process.stdout.write(`CPU usage: ${cpuUSage}\n`)
+  process.stdout.write(`Memory usage: ${memUsage}\n`)
+  process.stdout.write(`Running since: ${runningTime}\n`)
+  process.stdout.write('-------------------------------\n')
+  process.stdout.write('\x1b[31m[0]\x1b[0m Back\n\x1b[33m[1]\x1b[0m Kill     \x1b[33m[2]\x1b[0m Elevate priority\n\x1b[33m[3]\x1b[0m Restart  \x1b[33m[4]\x1b[0m File usage\n')
+  const option = await terminal.question('>>')
+  if (option == "0") {return 0}
+  else if (option == "1") {execSync(`kill ${processID}`)}
+  else if (option == "2") {execSync(`sudo renice -n -20 -p ${processID}`)}
+  else if (option == "3") {execSync(`kill -HUP ${processID}`)}
+  else if (option == "4") {execSync(`lsof -p ${processID}`)}
+  else {process.stdout.write('\x1b[31m[-]\x1b[0m Err: inexistent action...'); return 1}
 }
 
 async function main() {
   while (true) {
     console.clear()
-    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mInstall Help\n\x1b[33m[4]\x1b[0m Solve package manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
+    process.stdout.write('\x1b[31m[0]\x1b[0m Exit\n\x1b[33m[1]\x1b[0m Solve Wi-Fi    \x1b[33m[2]\x1b[0m Solve Sound\n\x1b[33m[3] \x1b[0mInstall Help   \x1b[33m[4]\x1b[0m Packages help\n\x1b[33m[5]\x1b[0m Process manager\n\x1b[33m[99]\x1b[0m Sleipgar Assistant\n')
     const action = await terminal.question('>>')
     if (action == "0") {process.exit(0)}
     if (action == "1") {
@@ -415,6 +438,8 @@ async function main() {
       await solve_apps().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "4") {
       await solve_pack_man().then(async() => {await terminal.question('Press [Enter] to clear...')})
+    } else if (action == "5") {
+      await process_manager().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "99") {
       await sleipgar_assistant()
     }
