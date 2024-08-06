@@ -13,10 +13,27 @@ const terminal = readline.createInterface({
   output: process.stdout,
 })
 
+async function save_log_messages(messages: CoreMessage[]) {
+  // Obtain date
+  const jNow = new Date();
+  const Day = String(jNow.getDate()).padStart(2, '0');
+  const Month = String(jNow.getMonth() + 1).padStart(2, '0');
+  const Year = jNow.getFullYear();
+  const Hour = String(jNow.getHours()).padStart(2, '0');
+  const Minutes = String(jNow.getMinutes()).padStart(2, '0');
+  const Seconds = String(jNow.getSeconds()).padStart(2, '0');
+  const formattedDate = `${Day}-${Month}-${Year}_${Hour}:${Minutes}:${Seconds}`;
+  // Create Log File
+  try {
+    await fs.promises.writeFile(formattedDate, JSON.stringify(messages, null, 2), 'utf8');
+    return `\x1b[32m[+]\x1b[0m Log saved at ${formattedDate}`;
+  } catch (e) {
+    return `\x1b[31m[-]\x1b[0m Err saving log: ${e}`;
+  }
+}
 async function sleipgar_assistant() {
   if (process.env['GOOGLE_GENERATIVE_AI_API_KEY'] === undefined) {
     process.stdout.write('\x1b[31m[!]\x1b[0m You need to configure an aistudio api key to use assistant\n')
-    await terminal.question('Press [Enter] to clear...')
     return 1
   }
   const user = os.userInfo().username;
@@ -42,21 +59,11 @@ async function sleipgar_assistant() {
   process.stdout.write('\x1b[33m[*]\x1b[0m To exit the chat write "bye"\n')
   while (true) {
     const userInput = await terminal.question(`${user}: `)
+    if (userInput.length < 1) {process.stdout.write('\x1b[31m[*]\x1b[0m Please enter a message.\n'); continue}
     if (userInput === 'bye') {
-      // Obtain date
-      const jNow = new Date();
-      const Day = String(jNow.getDate()).padStart(2, '0');
-      const Month = String(jNow.getMonth() + 1).padStart(2, '0');
-      const Year = jNow.getFullYear();
-      const Hour = String(jNow.getHours()).padStart(2, '0');
-      const Minutes = String(jNow.getMinutes()).padStart(2, '0');
-      const Seconds = String(jNow.getSeconds()).padStart(2, '0');
-      const formattedDate = `${Day}-${Month}-${Year}_${Hour}:${Minutes}:${Seconds}`;
-      // Create Log File
-      fs.writeFile(formattedDate, JSON.stringify(messages, null, 2), (e) => {
-        if (e) {process.stdout.write(`\n\x1b[31m[-]\x1b[0m Err saving log: ${e}\n`)}
-        else {process.stdout.write(`\n\x1b[32m[+]\x1b[0m Log saved at ${formattedDate}\n`)}
-      })
+      const logVerify = await terminal.question('Do you want save messages log [Y/n] >> ')
+      if (logVerify.toLowerCase() === 'n') {break}
+      await save_log_messages(messages).then((response) => {process.stdout.write(`\n${response}\n`)})
       break
     }
     messages.push({ role: 'user', content: userInput })
@@ -457,7 +464,7 @@ async function main() {
     } else if (action == "5") {
       await process_manager().then(async() => {await terminal.question('Press [Enter] to clear...')})
     } else if (action == "99") {
-      await sleipgar_assistant()
+      await sleipgar_assistant().then(async() => {await terminal.question('Press [Enter] to clear...')})
     }
   }
 }
