@@ -42,7 +42,23 @@ async function sleipgar_assistant() {
   process.stdout.write('\x1b[33m[*]\x1b[0m To exit the chat write "bye"\n')
   while (true) {
     const userInput = await terminal.question(`${user}: `)
-    if (userInput === 'bye') {break}
+    if (userInput === 'bye') {
+      // Obtain date
+      const jNow = new Date();
+      const Day = String(jNow.getDate()).padStart(2, '0');
+      const Month = String(jNow.getMonth() + 1).padStart(2, '0');
+      const Year = jNow.getFullYear();
+      const Hour = String(jNow.getHours()).padStart(2, '0');
+      const Minutes = String(jNow.getMinutes()).padStart(2, '0');
+      const Seconds = String(jNow.getSeconds()).padStart(2, '0');
+      const formattedDate = `${Day}-${Month}-${Year}_${Hour}:${Minutes}:${Seconds}`;
+      // Create Log File
+      fs.writeFile(formattedDate, JSON.stringify(messages, null, 2), (e) => {
+        if (e) {process.stdout.write(`\n\x1b[31m[-]\x1b[0m Err saving log: ${e}\n`)}
+        else {process.stdout.write(`\n\x1b[32m[+]\x1b[0m Log saved at ${formattedDate}\n`)}
+      })
+      break
+    }
     messages.push({ role: 'user', content: userInput })
 
     const result = await streamText({
