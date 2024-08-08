@@ -423,15 +423,17 @@ async function solve_apps() {
 }
 async function process_manager() {
   const processName = await terminal.question('process name > ')
-  const processInfo = execSync(`ps faux | grep ${processName}`).toString().split(/\s+/)
-  const processID = processInfo[1]
-  const runningTime = processInfo[8]
+  let process_info = execSync(`ps faux | grep ${processName} | wc -l`).toString()
+  if (parseInt(process_info) > 2) {process_info = execSync(`ps faux | grep ${processName} | tail -${parseInt(process_info)-2}`).toString()}
+  else {process.stdout.write(`\n\x1b[31m[*]\x1b[0m Err: Process "${processName} doesn't exist."\n`); return 1}
+  const processID = process_info.split(/\s+/)[1]
+  const runningTime = process_info.split(/\s+/)[8]
   const processMonitor = execSync(`ps -p ${processID} -o %cpu,%mem,comm | awk 'NR==2'`).toString().split(/\s+/)
   const cpuUSage = processMonitor[1]
   const memUsage = processMonitor[2]
   const processTitle = processMonitor[3]
 
-  process.stdout.write(`Process name: ${processTitle}\n`)
+  process.stdout.write(`\nProcess name: ${processTitle}\n`)
   process.stdout.write(`Process ID: ${processID}\n`)
   process.stdout.write(`CPU usage: ${cpuUSage}\n`)
   process.stdout.write(`Memory usage: ${memUsage}\n`)
